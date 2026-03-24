@@ -2,21 +2,66 @@ name: 舆情监控定时任务
 
 on:
   schedule:
+    # 每天 10:00 (UTC+8 = UTC 02:00)
     - cron: '0 2 * * *'
+    # 每天 15:00 (UTC+8 = UTC 07:00)
     - cron: '0 7 * * *'
-  workflow_dispatch:
+  workflow_dispatch:  # 支持手动触发
 
 jobs:
   sentiment-monitor:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
+    concurrency:  # 避免并发
+      group: sentiment-monitor
+      cancel-in-progress: false
+
     steps:
-      - name: 运行任务
+      - name: 执行舆情监控
+        env:
+          API_TOKEN: ${{ secrets.COZE_API_TOKEN }}  # 从 Secrets 读取
         run: |
-          echo "任务开始"
-          curl -X POST "https://ymrbm3nqxt.coze.site/run" \
+          set -e  # 任何命令失败即退出
+
+          echo "=========================================="
+          echo "开始执行舆情监控任务: $(date)"
+          echo "=========================================="
+
+          # 发送请求并同时捕获 HTTP 状态码和响应体
+          response=$(curl -s -w "\n%{http_code}" -X POST "https://ymrbm3nqxt.coze.site/run" \
             -H "Content-Type: application/json" \
-            -H "Authorization: Bearer ${{ secrets.COZE_API_TOKEN }}" \
+            -H "Authorization: Bearer ${API_TOKEN}" \
             -d '{"messages": [{"role": "user", "content": "开始舆情监控"}]}' \
-            --connect-timeout 5 --max-time 10
-          echo "任务结束"
+            --max-time 600)
+
+          # 分离响应体（最后一行是状态码）
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+
+          echo "HTTP 状态码: $http_code"
+          echo "API 响应体:"
+          echo "$body" | head -100
+
+          # 检查 HTTP 状态码是否为 2xx
+          if [[ $http_code -lt 200 || $http_code -ge 300 ]]; then
+            echo "HTTP 请求失败，状态码: $http_code"
+            exit 1
+          fi
+
+          # 检查业务错误（根据你的 API 返回格式调整）
+          if echo "$body" | grep -q '"error"'; then
+            echo "业务错误: $body"
+            exit 1
+          fi
+
+          echo "=========================================="
+          echo "任务执行完成: $(date)"
+          echo "=========================================="
+
+      - name: 失败通知（可选）
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.setFailed('舆情监控任务执行失败，请检查日志。')
+            # 这里可以调用 Slack、钉钉等 webhook 发送通知
