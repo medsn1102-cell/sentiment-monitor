@@ -2,37 +2,21 @@ name: 舆情监控定时任务
 
 on:
   schedule:
-    - cron: '0 2 * * *'  # 北京时间10:00
-    - cron: '0 7 * * *'  # 北京时间15:00
+    - cron: '0 2 * * *'
+    - cron: '0 7 * * *'
   workflow_dispatch:
 
 jobs:
   sentiment-monitor:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-
+    timeout-minutes: 5
     steps:
-      - name: 执行舆情监控
-        shell: bash
+      - name: 运行任务
         run: |
-          set -euo pipefail
-          echo "=========================================="
-          echo "任务开始：$(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')"
-          echo "=========================================="
-
-          # 🔥 唯一可用方案：海外专用国内代理（支持POST+请求头）
-          curl -s -X POST "https://api.dujin.org/poxy/" \
+          echo "任务开始"
+          curl -X POST "https://ymrbm3nqxt.coze.site/run" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${{ secrets.COZE_API_TOKEN }}" \
-            -d '{
-              "url": "https://ymrbm3nqxt.coze.site/run",
-              "method": "POST",
-              "data": "{\"messages\": [{\"role\": \"user\", \"content\": \"开始舆情监控\"}]}"
-            }' \
-            --connect-timeout 15 \
-            --max-time 60 \
-            --retry 2
-
-          echo -e "\n=========================================="
-          echo "✅ 任务执行完成"
-          echo "=========================================="
+            -d '{"messages": [{"role": "user", "content": "开始舆情监控"}]}' \
+            --connect-timeout 5 --max-time 10
+          echo "任务结束"
