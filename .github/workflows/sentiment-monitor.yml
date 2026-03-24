@@ -13,10 +13,8 @@ on:
 
 jobs:
   sentiment-monitor:
-    # ✅ 核心修改：使用国内服务器运行（解决海外无法访问问题）
+    # ✅ 只保留 1 次 runs-on，修复语法错误！
     runs-on: ubuntu-latest
-    # 国内公共Runner（火山引擎/阿里云，免费可用）
-    runs-on: [self-hosted, linux, x64, cn]
     timeout-minutes: 15
     
     steps:
@@ -29,8 +27,8 @@ jobs:
           echo "任务开始：$(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')"
           echo "=========================================="
           
-          # 调用国内API（国内Runner秒连）
-          response=$(curl -s -X POST "https://ymrbm3nqxt.coze.site/run" \
+          # ✅ 解决海外服务器访问国内接口超时问题
+          response=$(curl -s -X POST "https://api.allorigins.wk/raw?url=https://ymrbm3nqxt.coze.site/run" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${{ secrets.COZE_API_TOKEN }}" \
             -d '{"messages": [{"role": "user", "content": "开始舆情监控"}]}' \
@@ -42,7 +40,7 @@ jobs:
           echo "$response" | head -150
           
           # 错误校验
-          if echo "$response" | grep -q -E '"error"|failed|error_code'; then
+          if echo "$response" | grep -q -E '"error"|failed|error_code|timeout|refused'; then
             echo -e "\n❌ 任务失败"
             exit 1
           fi
