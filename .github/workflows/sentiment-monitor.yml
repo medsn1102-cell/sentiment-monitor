@@ -1,39 +1,68 @@
 name: 舆情监控定时任务
 
+# 并发控制：防止重复任务同时执行，避免API冲突
+concurrency:
+  group: sentiment-monitor
+  cancel-in-progress: false
+
 on:
   schedule:
-    # 每天 10:00 (UTC+8 = UTC 02:00)
+    # 每天 北京时间 10:00 (UTC 02:00)
     - cron: '0 2 * * *'
-    # 每天 15:00 (UTC+8 = UTC 07:00)
+    # 每天 北京时间 15:00 (UTC 07:00)
     - cron: '0 7 * * *'
+  # 手动触发（测试用）
   workflow_dispatch:
 
 jobs:
   sentiment-monitor:
     runs-on: ubuntu-latest
+    # 超时保护（15分钟，和curl超时匹配）
     timeout-minutes: 15
     
     steps:
-      - name: 执行舆情监控
+      - name: 执行舆情监控API调用
+        # 严格模式：命令报错立即终止任务，避免异常执行
+        shell: bash
         run: |
+          set -euo pipefail
+          
+          # ==========================================
+          # 日志输出：自动转换为 北京时间（UTC+8），更直观
+          # ==========================================
           echo "=========================================="
-          echo "开始执行舆情监控任务: $(date)"
+          echo "任务开始时间：$(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')"
+          echo "任务类型：舆情监控自动执行"
           echo "=========================================="
           
+          # ==========================================
+          # 调用API：重试3次 + 超时10分钟 + 安全密钥
+          # ==========================================
           response=$(curl -s -X POST "https://ymrbm3nqxt.coze.site/run" \
             -H "Content-Type: application/json" \
-            -H "Authorization: Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6ImI4MGIwYzhkLTQzZmYtNDgwYS04Y2VkLWU1ZmNkYjNlN2JkNCJ9.eyJpc3MiOiJodHRwczovL2FwaS5jb3plLmNuIiwiYXVkIjpbIjZpcDRNUDZobkRWdzRuV3lIMVJTd3lqY1Fjb1RhQ2Z0Il0sImV4cCI6ODIxMDI2Njg3Njc5OSwiaWF0IjoxNzczOTY4ODE5LCJzdWIiOiJzcGlmZmU6Ly9hcGkuY296ZS5jbi93b3JrbG9hZF9pZGVudGl0eS9pZDo3NjE4ODM1NzM2NDcwMDI4Mjk3Iiwic3JjIjoiaW5ib3VuZF9hdXRoX2FjY2Vzc190b2tlbl9pZDo3NjE5MTM4MDY0ODYxODg4NTE4In0.H0LAa7nzde0J9gIp8jP2r64MN9h2qGnPpEd1z44YGDj12RJqrIW_b5dRUFQFkk2CZwUVrDsAIplGzw_JZrlmLqffcaVKSDz6YlRjMm5MjDo2xRalq9U4ZXqs7XMKYVHCzJ-PVT3vgfmbutJnPuyv1MD6TPDdAPEA_oF5_Cs3KzndQZdNkdzihmhK013VaG6Y-_kElKSjMnJMr68BRoqrGcCDp0rLwEnqFDqPxGvohm2-Fb2GvQOK01Ka-XSE7NLbjYllsuGiK6lU7l6z0eTY9LeUaXnccVHx1u-e9YlFM0ZUCuESXp5Y4BNze1haQl6DCI0yOGu4dkh0TKzi3Mk3pA" \
+            -H "Authorization: Bearer ${{ secrets.COZE_API_TOKEN }}" \
             -d '{"messages": [{"role": "user", "content": "开始舆情监控"}]}' \
-            --max-time 600)
+            --max-time 600 \
+            --retry 3 \
+            --retry-delay 5)
           
-          echo "API 响应:"
-          echo "$response" | head -100
+          # ==========================================
+          # 日志输出：只打印前150行，避免日志溢出
+          # ==========================================
+          echo -e "\nAPI 响应内容："
+          echo "$response" | head -150
           
-          if echo "$response" | grep -q '"error"'; then
-            echo "任务执行失败"
+          # ==========================================
+          # 双重错误校验：命令失败 / 接口返回错误
+          # ==========================================
+          if echo "$response" | grep -q -E '"error"|failed|error_code'; then
+            echo -e "\n❌ 任务执行失败：API返回异常"
             exit 1
           fi
           
-          echo "=========================================="
-          echo "任务执行完成: $(date)"
+          # ==========================================
+          # 任务完成日志
+          # ==========================================
+          echo -e "\n=========================================="
+          echo "✅ 任务执行完成：$(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')"
           echo "=========================================="
