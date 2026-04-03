@@ -28,7 +28,7 @@ jobs:
           echo "=========================================="
 
           # 发送请求并同时捕获 HTTP 状态码和响应体
-          response=$(curl -s -w "\n%{http_code}" -X POST "https://ymrbm3nqxt.coze.site/run" \
+          response=$(curl -s -w "\n%{http_code}" -X POST "https://bbtbmsf228.coze.site/stream_run" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${API_TOKEN}" \
             -d '{"messages": [{"role": "user", "content": "开始舆情监控"}]}' \
