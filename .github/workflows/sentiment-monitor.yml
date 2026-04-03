@@ -2,10 +2,12 @@ name: 舆情监控定时任务
 
 on:
   schedule:
-    # 每天 10:00 (UTC+8 = UTC 02:00)
-    - cron: '0 2 * * *'
-    # 每天 15:00 (UTC+8 = UTC 07:00)
-    - cron: '0 7 * * *'
+    # 每天 09:00 (UTC+8 = UTC 01:00)
+    - cron: '0 1 * * *'
+    # 每天 13:00 (UTC+8 = UTC 05:00)
+    - cron: '0 5 * * *'
+    # 每天 16:00 (UTC+8 = UTC 08:00)
+    - cron: '0 8 * * *'
   workflow_dispatch:  # 支持手动触发
 
 jobs:
