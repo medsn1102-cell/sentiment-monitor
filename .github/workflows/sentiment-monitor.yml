@@ -2,12 +2,9 @@ name: 舆情监控定时任务
 
 on:
   schedule:
-    # 每天北京时间 07:30 (UTC 23:30，前一日)
-    - cron: '30 23 * * *'
-    # 每天北京时间 11:00 (UTC 03:00)
-    - cron: '0 3 * * *'
-    # 每天北京时间 14:00 (UTC 06:00)
-    - cron: '0 6 * * *'
+    - cron: '0 1 * * *'
+    - cron: '0 5 * * *'
+    - cron: '0 8 * * *'
   workflow_dispatch:
 
 jobs:
@@ -20,37 +17,16 @@ jobs:
 
     steps:
       - name: 执行舆情监控（含抖音/小红书）
-        id: monitor
         env:
           API_TOKEN: ${{ secrets.COZE_API_TOKEN }}
         run: |
           set -e
+          echo "开始执行舆情监控任务: $(date)"
+          echo "目标: https://bbtbmsf228.coze.site/stream_run"
 
-          # 生成动态 session_id（日期+随机数）
-          SESSION_ID="scheduled-$(date +%Y%m%d%H%M%S)-$RANDOM"
-          echo "Session ID: $SESSION_ID"
-
-          # 最大重试次数
-          MAX_RETRIES=3
-          RETRY_DELAY=10  # 秒
-
-          # 智能体执行地址（硬编码）
-          API_URL="https://bbtbmsf228.coze.site/stream_run"
-
-          for ((i=1; i<=MAX_RETRIES; i++)); do
-            echo "第 $i 次尝试 (共 $MAX_RETRIES 次) ..."
-
-            # 发起请求，超时 28 分钟（1680 秒）
-            RESP=$(curl -s -w "\n%{http_code}" \
-              -X POST "$API_URL" \
-              -H "Content-Type: application/json" \
-              -H "Authorization: Bearer ${API_TOKEN}" \
-              -d @- \
-              --max-time 1680 \
-              << 'ENDJSON'
-          {
+          JSON='{
             "type": "query",
-            "session_id": "'"$SESSION_ID"'",
+            "session_id": "scheduled",
             "project_id": 7622830068435419186,
             "content": {
               "query": {
@@ -64,61 +40,23 @@ jobs:
                 ]
               }
             }
-          }
-          ENDJSON
-            )
+          }'
 
-            HTTP_CODE=$(echo "$RESP" | tail -n1)
-            BODY=$(echo "$RESP" | sed '$d')
-
-            echo "HTTP 状态码: $HTTP_CODE"
-            # 仅打印前 500 字符，避免日志过长
-            echo "响应体摘要: $(echo "$BODY" | head -c 500)"
-
-            # 检查 HTTP 状态
-            if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
-              echo "HTTP 请求失败，状态码 $HTTP_CODE"
-              if [ $i -lt $MAX_RETRIES ]; then
-                echo "等待 ${RETRY_DELAY}s 后重试..."
-                sleep $RETRY_DELAY
-                continue
-              else
-                echo "所有重试均失败，退出"
-                exit 1
-              fi
-            fi
-
-            # 检查业务状态（假设 API 返回 JSON 包含 code 字段，0 为成功）
-            if echo "$BODY" | grep -q '"code":0'; then
-              echo "✅ 任务执行成功（业务状态正常）"
-              exit 0
-            else
-              echo "⚠️ 业务状态异常，响应内容可能包含错误信息"
-              if [ $i -lt $MAX_RETRIES ]; then
-                echo "等待 ${RETRY_DELAY}s 后重试..."
-                sleep $RETRY_DELAY
-                continue
-              else
-                echo "业务状态持续异常，退出"
-                exit 1
-              fi
-            fi
-          done
-
-          # 理论上不会执行到这里，但以防万一
-          exit 1
-
-      - name: 失败时发送企业微信告警
-        if: failure()
-        run: |
-          # 企业微信机器人 Webhook（硬编码）
-          WECOM_WEBHOOK="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=a7d02159-b945-406c-9fce-0fb089f019a3"
-
-          curl -X POST "$WECOM_WEBHOOK" \
+          RESP=$(curl -s -w "\n%{http_code}" \
+            -X POST "https://bbtbmsf228.coze.site/stream_run" \
             -H "Content-Type: application/json" \
-            -d "{
-              \"msgtype\": \"text\",
-              \"text\": {
-                \"content\": \"❌ 舆情监控任务执行失败！\n时间: $(date '+%Y-%m-%d %H:%M:%S')\n作业: ${{ github.workflow }}\n仓库: ${{ github.repository }}\n请检查 Actions 日志。\"
-              }
-            }"
+            -H "Authorization: Bearer ${API_TOKEN}" \
+            -d "$JSON" \
+            --max-time 1800
+          )
+
+          HTTP_CODE=$(echo "$RESP" | tail -n1)
+
+          echo "HTTP: $HTTP_CODE"
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "请求失败"
+            exit 1
+          fi
+
+          echo "任务执行完成: $(date)"
