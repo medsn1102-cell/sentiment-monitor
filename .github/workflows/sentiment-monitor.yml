@@ -20,10 +20,10 @@ jobs:
         run: |
           set -e
           echo "开始执行舆情监控任务: $(date)"
-          echo "目标: https://fa34b440-4b64-4c40-9168-18e422c7f61b.dev.coze.site/stream_run"
+          echo "目标: https://bbtbmsf228.coze.site/stream_run"
 
           RESP=$(curl -s -w "\n%{http_code}" \
-            -X POST "https://fa34b440-4b64-4c40-9168-18e422c7f61b.dev.coze.site/stream_run" \
+            -X POST "https://bbtbmsf228.coze.site/stream_run" \
             -H "Content-Type: application/json" \
             -d @- \
             --max-time 1800 << 'ENDJSON'
